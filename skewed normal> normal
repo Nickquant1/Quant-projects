@@ -1,0 +1,51 @@
+import pandas as pd
+import numpy as np 
+import matplotlib.pyplot as plt
+
+def getdatatiingo(ticker, years):        #API to import financial data
+    end_date = datetime.datetime.now().date()
+    start_date = (end_date - datetime.timedelta(days=365 * years))
+    config = {
+    'session': True,
+    'api_key': tiingo_api_key
+    }
+    client = TiingoClient(config)
+    data = client.get_dataframe(ticker, startDate=start_date.strftime('%Y-%m-%d'),
+        endDate=end_date.strftime('%Y-%m-%d')
+    )
+    return data
+
+spy=getdatatiingo("SPY", 25) #sp500 index data
+
+class regimes_z:  #model to see price quartile
+    def __init__(self,data):
+        self.data=data.copy()
+        self.close=self.data["close"]
+        self.log_ret=np.log(self.data["close"]/self.data["close"].shift())
+    def features_z(self, window):
+        self.data["rv"]=self.log_ret.rolling(window=window).std()
+        self.data["log_ret_mean"]=self.log_ret.rolling(window=window).mean()
+        self.data["1z"]=self.close.shift()*np.exp(self.data["rv"].shift()) #non moltiplico per radice di t, perchè t=1, sarebbe una rindondanza
+        self.data["-1z"]=self.close.shift()*np.exp(-self.data["rv"].shift())
+        self.data["mean"]=self.close.shift()*np.exp(self.data["log_ret_mean"].shift())
+        self.data["std_30_close"]=self.close.shift()* (np.exp(self.data["rv"].shift()) - 1)
+        self.data["z_score"]=(self.close-self.data["mean"])/self.data["std_30_close"]
+    def distribution_and_ks(self):
+        #plotting
+        plt.hist(self.data["z_score"], bins=100)
+        plt.show()
+        #ks-test
+        dist=self.data["z_score"].dropna()
+        ks_stat, p_value = kstest(dist, 'norm')
+        
+        print(f"KS Statistic: {ks_stat}")
+        print(f"P-value: {p_value}")
+        print(dist.skew())
+        print(dist.kurtosis())
+
+#Testing the conjecture on 2000-2002 time interval
+spy_2000_2002=spy.loc[spy.index<"2002"]
+spy_2000_2002_regimes_z=regimes_z(spy_2000_2002)
+spy_2000_2002_regimes_z.features_z(window=30)
+spy_2000_2002_regimes_z.distribution_and_ks()
+        
